@@ -1,0 +1,102 @@
+# ================================
+# Miscellaneous
+# ================================
+*.class
+*.log
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# ================================
+# IntelliJ / Android Studio
+# ================================
+*.iml
+*.ipr
+*.iws
+.idea/
+*.idea/
+
+# ================================
+# VS Code (optional but recommended)
+# ================================
+.vscode/
+
+# ================================
+# Flutter / Dart / Pub
+# ================================
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.metadata
+
+# ================================
+# Android
+# ================================
+android/.gradle/
+android/local.properties
+android/**/build/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# ================================
+# iOS / macOS
+# ================================
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+
+# ================================
+# Web (Flutter)
+# ================================
+web/.dart_tool/
+web/build/
+
+# ================================
+# Python / FastAPI
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.*
+venv/
+env/
+.venv/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+
+# ================================
+# Logs & Runtime
+# ================================
+*.out
+*.err
+
+# ================================
+# Symbolication / Obfuscation
+# ================================
+app.*.symbols
+app.*.map.json

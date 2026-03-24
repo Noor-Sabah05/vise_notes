@@ -1,0 +1,30 @@
+# ============ FastAPI & Web Framework ============
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+
+# ============ Audio Processing ============
+# Speech-to-Text Transcription
+faster-whisper>=0.9.0
+
+# Audio Manipulation & Processing
+librosa>=0.10.0
+noisereduce>=3.0.0
+soundfile>=0.12.1
+numpy>=1.20.0
+
+# ============ AI & LLM ============
+# Google Gemini for Note Generation
+google-generativeai>=0.3.0
+
+# ============ PDF Generation ============
+reportlab==4.0.7
+
+# ============ Configuration & Utilities ============
+python-dotenv==1.0.0
+
+# ============ Optional: Production Server ============
+# Uncomment for production deployment
+# gunicorn==21.2.0
+# psycopg2-binary==2.9.0  # For PostgreSQL if moving to it
