@@ -55,6 +55,35 @@ def health():
     return {"status": "running"}
 
 
+@app.post("/clean-audio")
+async def clean_audio(file: UploadFile = File(...)):
+    allowed = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+    ext = Path(file.filename).suffix.lower()
+
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    temp_id = str(uuid.uuid4())
+    raw_path = UPLOAD_DIR / f"{temp_id}_raw{ext}"
+    clean_path = UPLOAD_DIR / f"{temp_id}_clean.wav"
+
+    with open(raw_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # process audio
+    preprocess_audio(raw_path, clean_path)
+
+    # IMPORTANT: only delete RAW file, NOT clean file
+    raw_path.unlink(missing_ok=True)
+
+    # return file (DO NOT DELETE CLEAN FILE HERE)
+    return FileResponse(
+        path=clean_path,
+        media_type="audio/wav",
+        filename="clean_audio.wav"
+    )
+
+
 # ─────────────────────────────────────────────────────────────
 # 1️⃣ RAW AUDIO → TRANSCRIPT ONLY
 # ─────────────────────────────────────────────────────────────
