@@ -14,6 +14,8 @@ from services.notes_service import NotesService
 from services.pdf_service import generate_pdf
 from config import GEMINI_API_KEY
 from models.notes_request_model import NotesRequest
+from services.pdf_reader import extract_text_from_pdf
+from services.quiz_pdf_service import generate_quiz_pdf
 
 
 # ─────────────────────────────────────────────────────────────
@@ -278,4 +280,47 @@ async def process_audio(file: UploadFile = File(...)):
         path=pdf_path,
         media_type="application/pdf",
         filename="notes.pdf",
+    )
+
+
+@app.post("/generate-quiz-pdf")
+async def generate_quiz_pdf_endpoint(file: UploadFile = File(...)):
+    """
+    PDF → Quiz → Quiz PDF
+    """
+
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF allowed")
+
+    file_id = str(uuid.uuid4())
+
+    input_pdf_path = PDF_DIR / f"{file_id}_input.pdf"
+    output_pdf_path = PDF_DIR / f"{file_id}_quiz.pdf"
+
+    # Save uploaded PDF
+    with open(input_pdf_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Extract text
+    text = extract_text_from_pdf(str(input_pdf_path))
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Empty PDF content")
+
+    # Limit text for LLM
+    text = text[:8000]
+
+    # Generate quiz
+    quiz_text = notes_service.generate_quiz(text)
+
+    # Generate quiz PDF
+    generate_quiz_pdf(str(output_pdf_path), quiz_text)
+
+    # Cleanup input PDF (optional)
+    input_pdf_path.unlink(missing_ok=True)
+
+    return FileResponse(
+        path=output_pdf_path,
+        media_type="application/pdf",
+        filename="quiz.pdf",
     )

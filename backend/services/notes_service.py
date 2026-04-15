@@ -77,3 +77,35 @@ class NotesService:
             "content": data.get("content", ""),
             "key_points": data.get("key_points", ""),
         }
+    
+    def generate_quiz(self, text: str):
+        prompt = f"""
+        Generate a quiz in STRICT structured format.
+
+        FORMAT EXACTLY LIKE THIS:
+
+        MCQS:
+        1. Question text
+        A. Option
+        B. Option
+        C. Option
+        D. Option
+        Answer: X
+
+        SHORT QUESTIONS:
+        1. Question
+        2. Question
+
+        LONG QUESTION:
+        1. Question
+
+        Content:
+        {text}
+        """
+
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        return response.text
