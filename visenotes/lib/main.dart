@@ -5,6 +5,7 @@ import 'screens/events_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/recordings_screen.dart';
 import 'screens/save_screen.dart';
+import 'screens/category_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,6 +50,7 @@ class _MainShellState extends State<MainShell> {
 
   late final List<Widget> _screens = [
     const HomeScreen(),
+    const CategoryScreen(),
     const TranscriptsScreen(),
     const RecordingsScreen(),
     const EventsScreen(),
@@ -70,12 +72,13 @@ class _MainShellState extends State<MainShell> {
         onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.category), label: 'Library'),
           BottomNavigationBarItem(icon: Icon(Icons.note), label: 'Transcripts'),
           BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'Records'),
           BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
-        type: BottomNavigationBarType.fixed,
+        type: BottomNavigationBarType.shifting,
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF9859FF),
         unselectedItemColor: Colors.grey,

@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from faster_whisper import WhisperModel
+from wispermodel import WhisperModelManager
 
 from database import init_db, save_transcript
 from services.audio_service import preprocess_audio
@@ -14,6 +14,8 @@ from services.notes_service import NotesService
 from services.pdf_service import generate_pdf
 from config import GEMINI_API_KEY
 from models.notes_request_model import NotesRequest
+from services.pdf_reader import extract_text_from_pdf
+from services.quiz_pdf_service import generate_quiz_pdf
 
 
 # ─────────────────────────────────────────────────────────────
@@ -36,11 +38,8 @@ PDF_DIR.mkdir(exist_ok=True)
 
 
 # ─────────────────────────────────────────────────────────────
-# LOAD MODELS
+# Load GEIMINI model & Initialize DB 
 # ─────────────────────────────────────────────────────────────
-print("Loading Whisper...")
-model = WhisperModel("small", device="cpu", compute_type="int8")
-
 print("Loading Gemini...")
 notes_service = NotesService(GEMINI_API_KEY)
 
@@ -105,7 +104,8 @@ async def transcribe(file: UploadFile = File(...)):
 
     preprocess_audio(raw_path, clean_path)
 
-    segments, info = model.transcribe(str(clean_path))
+    whisper_model = WhisperModelManager.get_model()
+    segments, info = whisper_model.transcribe(str(clean_path))
     transcript = " ".join(s.text.strip() for s in segments)
 
     raw_path.unlink(missing_ok=True)
@@ -141,7 +141,7 @@ def generate_notes(req: NotesRequest):
 # 3️⃣ TRANSCRIPT → PDF
 # ─────────────────────────────────────────────────────────────
 @app.post("/generate-pdf")
-def generate_pdf_endpoint(req: NotesRequest):
+async def generate_pdf_endpoint(req: NotesRequest):
     if not req.transcript.strip():
         raise HTTPException(status_code=400, detail="Empty transcript")
 
@@ -195,7 +195,8 @@ async def audio_to_pdf(file: UploadFile = File(...)):
     preprocess_audio(audio_path, clean_path)
 
     # Transcription
-    segments, info = model.transcribe(str(clean_path))
+    whisper_model = WhisperModelManager.get_model()
+    segments, info = whisper_model.transcribe(str(clean_path))
     transcript = " ".join(s.text.strip() for s in segments)
 
     # Save transcript (optional tracking)
@@ -254,7 +255,8 @@ async def process_audio(file: UploadFile = File(...)):
 
     preprocess_audio(raw_path, clean_path)
 
-    segments, info = model.transcribe(str(clean_path))
+    whisper_model = WhisperModelManager.get_model()
+    segments, info = whisper_model.transcribe(str(clean_path))
     transcript = " ".join(s.text.strip() for s in segments)
 
     save_transcript(
@@ -278,4 +280,47 @@ async def process_audio(file: UploadFile = File(...)):
         path=pdf_path,
         media_type="application/pdf",
         filename="notes.pdf",
+    )
+
+
+@app.post("/generate-quiz-pdf")
+async def generate_quiz_pdf_endpoint(file: UploadFile = File(...)):
+    """
+    PDF → Quiz → Quiz PDF
+    """
+
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF allowed")
+
+    file_id = str(uuid.uuid4())
+
+    input_pdf_path = PDF_DIR / f"{file_id}_input.pdf"
+    output_pdf_path = PDF_DIR / f"{file_id}_quiz.pdf"
+
+    # Save uploaded PDF
+    with open(input_pdf_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Extract text
+    text = extract_text_from_pdf(str(input_pdf_path))
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Empty PDF content")
+
+    # Limit text for LLM
+    text = text[:8000]
+
+    # Generate quiz
+    quiz_text = notes_service.generate_quiz(text)
+
+    # Generate quiz PDF
+    generate_quiz_pdf(str(output_pdf_path), quiz_text)
+
+    # Cleanup input PDF (optional)
+    input_pdf_path.unlink(missing_ok=True)
+
+    return FileResponse(
+        path=output_pdf_path,
+        media_type="application/pdf",
+        filename="quiz.pdf",
     )

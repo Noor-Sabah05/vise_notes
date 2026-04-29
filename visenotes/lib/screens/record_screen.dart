@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import '../services/api_service.dart';
 import '../models/recording.dart';
+import 'notes_screen.dart';
 
 class RecordScreen extends StatefulWidget {
   const RecordScreen({super.key});
@@ -553,10 +554,40 @@ class _RecordScreenState extends State<RecordScreen> {
     });
 
     try {
-      final result = await ApiService.uploadAudio(_selectedFile!);
+      // Step 1: Transcribe audio
+      final transcriptResult = await ApiService.transcribeAudio(_selectedFile!);
+      final transcript = transcriptResult['transcript'];
+
       setState(() {
-        _transcript = result['transcript'];
+        _transcript = transcript;
       });
+
+      // Step 2: Generate notes from transcript
+      try {
+        final notesResult = await ApiService.generateNotes(transcript);
+
+        // Step 3: Navigate to NotesScreen with generated notes
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NotesScreen(
+                title: notesResult['title'] ?? 'Notes',
+                summary: notesResult['summary'] ?? '',
+                content: notesResult['content'] ?? '',
+                keyPoints: notesResult['key_points'] ?? '',
+                transcript: transcript,
+                audioFile: _selectedFile,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        // If notes generation fails, still show transcript
+        setState(() {
+          _errorMessage = 'Transcript ready. Note generation failed: $e';
+        });
+      }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');

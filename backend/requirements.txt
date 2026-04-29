@@ -1,0 +1,29 @@
+# FastAPI and web server
+fastapi
+uvicorn[standard]
+
+# Speech-to-text
+faster-whisper
+
+# AI/LLM - Gemini
+google-genai
+
+# PDF generation and reading
+reportlab
+pypdf
+
+# Audio processing
+numpy
+soundfile
+noisereduce
+
+# Environment variables
+python-dotenv
+python-multipart
+# Database (built-in, but included for clarity)
+# sqlite3 comes with Python
+
+# Development/Optional
+# pytest==7.4.3
+# black==23.11.0
+# flake8==6.1.0

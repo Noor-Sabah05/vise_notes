@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../models/recording.dart';
+import '../models/note.dart';
 import '../services/recording_service.dart';
+import '../services/db_service.dart';
 
 class SaveScreen extends StatefulWidget {
   final String? transcript;
@@ -26,17 +28,20 @@ class _SaveScreenState extends State<SaveScreen> {
   late TextEditingController _transcriptController;
   late TextEditingController _cleanedAudioController;
   late TextEditingController _customCategoryController;
-  String _selectedCategory = 'Business';
+  String _selectedCategory = 'General';
   bool _saveTranscript = true;
   bool _saveCleanedAudio = false;
 
   final List<String> _categories = [
-    'Business',
-    'Computer Science',
-    'Personal',
-    'Education',
-    'Meeting',
-    'Interview',
+    'General',
+    'Mathematics',
+    'Physics',
+    'Chemistry',
+    'Programming',
+    'AI & ML',
+    'Science',
+    'History',
+    'Language',
   ];
 
   @override
@@ -391,7 +396,7 @@ class _SaveScreenState extends State<SaveScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final title = _titleController.text.trim();
                   if (title.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -428,6 +433,25 @@ class _SaveScreenState extends State<SaveScreen> {
                       cleanedAudio: '',
                     );
                     recordingService.addTranscript(transcriptRecording);
+
+                    // Also save to database for library view
+                    try {
+                      final note = Note(
+                        title: title,
+                        description: _transcriptController.text.substring(
+                          0,
+                          _transcriptController.text.length > 100
+                              ? 100
+                              : _transcriptController.text.length,
+                        ),
+                        date: now.toString().split(' ')[0],
+                        category: _selectedCategory,
+                      );
+                      await DBService().insert(note);
+                    } catch (e) {
+                      // Silently fail if database save fails
+                      print('Error saving to database: $e');
+                    }
                   }
 
                   // Save cleaned audio if enabled

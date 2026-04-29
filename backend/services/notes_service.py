@@ -7,6 +7,14 @@ class NotesService:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key)
 
+    def _ensure_string(self, value):
+        """Convert any value to string. If it's a list, join items with newlines."""
+        if isinstance(value, list):
+            return '\n'.join(str(item).strip() for item in value if item)
+        if value is None:
+            return ""
+        return str(value).strip()
+
     def generate_notes(self, transcript: str):
         prompt = f"""
         You are an expert academic note-taker.
@@ -72,8 +80,40 @@ class NotesService:
                 }
 
         return {
-            "title": data.get("title", "Notes"),
-            "summary": data.get("summary", ""),
-            "content": data.get("content", ""),
-            "key_points": data.get("key_points", ""),
+            "title": self._ensure_string(data.get("title", "Notes")),
+            "summary": self._ensure_string(data.get("summary", "")),
+            "content": self._ensure_string(data.get("content", "")),
+            "key_points": self._ensure_string(data.get("key_points", "")),
         }
+    
+    def generate_quiz(self, text: str):
+        prompt = f"""
+        Generate a quiz in STRICT structured format.
+
+        FORMAT EXACTLY LIKE THIS:
+
+        MCQS:
+        1. Question text
+        A. Option
+        B. Option
+        C. Option
+        D. Option
+        Answer: X
+
+        SHORT QUESTIONS:
+        1. Question
+        2. Question
+
+        LONG QUESTION:
+        1. Question
+
+        Content:
+        {text}
+        """
+
+        response = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        return response.text
