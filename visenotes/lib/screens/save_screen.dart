@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../models/recording.dart';
 import '../models/note.dart';
+import '../services/api_service.dart';
 import '../services/recording_service.dart';
 import '../services/db_service.dart';
+
+class SaveScreenArguments {
+  final String? transcript;
+  final File? selectedFile;
+  final String? fileName;
+  final String? selectedCategory;
+
+  const SaveScreenArguments({
+    this.transcript,
+    this.selectedFile,
+    this.fileName,
+    this.selectedCategory,
+  });
+}
 
 class SaveScreen extends StatefulWidget {
   final String? transcript;
@@ -31,6 +47,7 @@ class _SaveScreenState extends State<SaveScreen> {
   String _selectedCategory = 'General';
   bool _saveTranscript = true;
   bool _saveCleanedAudio = false;
+  bool _isSaving = false;
 
   final List<String> _categories = [
     'General',
@@ -47,7 +64,9 @@ class _SaveScreenState extends State<SaveScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
+    _titleController = TextEditingController(
+      text: widget.fileName ?? 'Untitled Recording',
+    );
     _transcriptController = TextEditingController(
       text: widget.transcript ?? '',
     );
@@ -69,6 +88,27 @@ class _SaveScreenState extends State<SaveScreen> {
     _cleanedAudioController.dispose();
     _customCategoryController.dispose();
     super.dispose();
+  }
+
+  Future<String?> _generateAndSaveCleanedAudio(File audioFile) async {
+    try {
+      final cleanedBytes = await ApiService.cleanAudio(audioFile);
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = 'cleaned_${DateTime.now().millisecondsSinceEpoch}.wav';
+      final file = File('${appDir.path}/$fileName');
+      await file.writeAsBytes(cleanedBytes);
+      return file.path;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to clean audio: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return null;
+    }
   }
 
   void _addCustomCategory() {
@@ -408,6 +448,8 @@ class _SaveScreenState extends State<SaveScreen> {
                     return;
                   }
 
+                  if (_isSaving) return;
+                  setState(() => _isSaving = true);
                   final recordingService = RecordingService();
                   final now = DateTime.now();
                   final id = DateTime.now().millisecondsSinceEpoch.toString();
@@ -455,18 +497,42 @@ class _SaveScreenState extends State<SaveScreen> {
                   }
 
                   // Save cleaned audio if enabled
-                  if (_saveCleanedAudio && widget.selectedFile != null) {
-                    final cleanedAudioRecording = Recording(
-                      id: id,
-                      title: title,
-                      category: _selectedCategory,
-                      date: now,
-                      duration: estimatedDuration,
-                      filePath: filePath,
-                      transcript: '',
-                      cleanedAudio: widget.fileName ?? 'cleaned_audio.wav',
-                    );
-                    recordingService.addCleanedAudio(cleanedAudioRecording);
+                  String? cleanedAudioPath;
+                  if (_saveCleanedAudio) {
+                    if (widget.selectedFile == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'No audio file available to clean. Please select an audio file before saving.',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } else {
+                      cleanedAudioPath = await _generateAndSaveCleanedAudio(
+                        widget.selectedFile!,
+                      );
+                      if (cleanedAudioPath != null) {
+                        final cleanedAudioRecording = Recording(
+                          id: id,
+                          title: title,
+                          category: _selectedCategory,
+                          date: now,
+                          duration: estimatedDuration,
+                          filePath: filePath,
+                          transcript: '',
+                          cleanedAudio: cleanedAudioPath,
+                        );
+                        recordingService.addCleanedAudio(cleanedAudioRecording);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to save cleaned audio'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   }
 
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -475,6 +541,7 @@ class _SaveScreenState extends State<SaveScreen> {
                       backgroundColor: Color(0xFF9859FF),
                     ),
                   );
+                  setState(() => _isSaving = false);
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
@@ -484,14 +551,23 @@ class _SaveScreenState extends State<SaveScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Save Recording',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Save Recording',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
           ],

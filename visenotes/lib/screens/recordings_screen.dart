@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/recording_service.dart';
 import '../models/recording.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
 
 class RecordingsScreen extends StatefulWidget {
   const RecordingsScreen({super.key});
@@ -14,10 +16,14 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   late RecordingService _recordingService;
   late AudioPlayer _audioPlayer;
   String _searchQuery = '';
+  String? _feedbackMessage;
+  Color _feedbackColor = const Color(0xFF9859FF);
 
   // State tracking for playback
   String? _currentlyPlayingId;
   bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _currentDuration = Duration.zero;
 
   @override
   void initState() {
@@ -36,6 +42,23 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         setState(() {
           _currentlyPlayingId = null;
           _isPlaying = false;
+          _currentPosition = Duration.zero;
+        });
+      }
+    });
+
+    _audioPlayer.positionStream.listen((position) {
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    });
+
+    _audioPlayer.durationStream.listen((duration) {
+      if (mounted) {
+        setState(() {
+          _currentDuration = duration ?? Duration.zero;
         });
       }
     });
@@ -112,6 +135,31 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                 ),
               ),
             ),
+            // Feedback banner
+            if (_feedbackMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    key: ValueKey(_feedbackMessage),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _feedbackColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      _feedbackMessage!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             // Cleaned audio list
             Expanded(
               child: filteredAudios.isEmpty
@@ -144,9 +192,9 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                             _currentlyPlayingId == audio.id && _isPlaying;
 
                         return GestureDetector(
-                          onTap: () {
-                            // Handle play or download cleaned audio
-                          },
+                          onTap: () => isCurrentlyPlaying
+                              ? _pauseAudio()
+                              : _playAudio(audio),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.all(16),
@@ -164,7 +212,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                       BoxShadow(
                                         color: const Color(
                                           0xFF9859FF,
-                                        ).withOpacity(0.3),
+                                        ).withAlpha(77),
                                         blurRadius: 8,
                                         spreadRadius: 2,
                                       ),
@@ -245,21 +293,104 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                     ],
                                   ),
                                 ),
-                                // Download button
+                                // Action buttons
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    InkWell(
-                                      onTap: () => _downloadAudio(audio),
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Icon(
-                                          Icons.download,
-                                          color: const Color(0xFF9859FF),
-                                          size: 24,
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      alignment: WrapAlignment.end,
+                                      children: [
+                                        InkWell(
+                                          onTap: () => _downloadAudio(audio),
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Icon(
+                                              Icons.download,
+                                              color: Color(0xFF9859FF),
+                                              size: 24,
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        InkWell(
+                                          onTap: () {
+                                            if (audio.cleanedAudio != null &&
+                                                audio.cleanedAudio!.isNotEmpty) {
+                                              OpenFile.open(audio.cleanedAudio!);
+                                            } else {
+                                              _showInlineFeedback(
+                                                'No cleaned audio file found',
+                                                color: Colors.redAccent,
+                                              );
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Icon(
+                                              Icons.open_in_new,
+                                              color: Color(0xFF9859FF),
+                                              size: 24,
+                                            ),
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () {
+                                            if (audio.cleanedAudio != null &&
+                                                audio.cleanedAudio!.isNotEmpty) {
+                                              Share.shareXFiles([
+                                                XFile(audio.cleanedAudio!),
+                                              ]);
+                                              _showInlineFeedback(
+                                                'Sharing audio',
+                                              );
+                                            } else {
+                                              _showInlineFeedback(
+                                                'No cleaned audio file found',
+                                                color: Colors.redAccent,
+                                              );
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Icon(
+                                              Icons.share,
+                                              color: Color(0xFF9859FF),
+                                              size: 24,
+                                            ),
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () {
+                                            _recordingService.removeCleanedAudio(audio.id);
+                                            if (_currentlyPlayingId == audio.id) {
+                                              _audioPlayer.stop();
+                                              setState(() {
+                                                _currentlyPlayingId = null;
+                                                _isPlaying = false;
+                                                _currentPosition = Duration.zero;
+                                              });
+                                            }
+                                            setState(() {});
+                                            _showInlineFeedback(
+                                              'Audio deleted',
+                                              color: Colors.redAccent,
+                                            );
+                                          },
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Icon(
+                                              Icons.delete,
+                                              color: Colors.redAccent,
+                                              size: 24,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
@@ -278,6 +409,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                       },
                     ),
             ),
+            if (_currentlyPlayingId != null)
+              _buildPlaybackFooter(filteredAudios),
           ],
         ),
       ),
@@ -292,9 +425,32 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     return '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
   }
 
+  Future<void> _seekAudio(Duration position) async {
+    try {
+      await _audioPlayer.seek(position);
+    } catch (e) {
+      _showInlineFeedback('Unable to seek audio: $e', color: Colors.redAccent);
+    }
+  }
+
+  Future<void> _seekRelative(Duration offset) async {
+    final maxDuration = _currentDuration;
+    final targetPosition = _currentPosition + offset;
+    final clampedPosition = targetPosition < Duration.zero
+        ? Duration.zero
+        : targetPosition > maxDuration
+        ? maxDuration
+        : targetPosition;
+
+    await _seekAudio(clampedPosition);
+  }
+
   Future<void> _playAudio(Recording audio) async {
     if (audio.cleanedAudio == null || audio.cleanedAudio!.isEmpty) {
-      _showSnackBar('No cleaned audio available for this recording');
+      _showInlineFeedback(
+        'No cleaned audio available for this recording',
+        color: Colors.redAccent,
+      );
       return;
     }
 
@@ -312,9 +468,9 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       await _audioPlayer.setFilePath(audio.cleanedAudio!);
       await _audioPlayer.play();
 
-      _showSnackBar('Playing: ${audio.title}');
+      _showInlineFeedback('Playing: ${audio.title}', color: Colors.greenAccent);
     } catch (e) {
-      _showSnackBar('Error playing audio: $e');
+      _showInlineFeedback('Error playing audio: $e', color: Colors.redAccent);
       setState(() {
         _currentlyPlayingId = null;
         _isPlaying = false;
@@ -326,39 +482,171 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     try {
       await _audioPlayer.pause();
     } catch (e) {
-      _showSnackBar('Error pausing audio: $e');
+      _showInlineFeedback('Error pausing audio: $e', color: Colors.redAccent);
+    }
+  }
+
+  Widget _buildPlaybackFooter(List<Recording> audios) {
+    final currentAudio = audios.firstWhere(
+      (audio) => audio.id == _currentlyPlayingId,
+      orElse: () => audios.first,
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF9859FF), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(13),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Now playing',
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            currentAudio.title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Slider(
+            min: 0,
+            max: _currentDuration.inMilliseconds.toDouble().clamp(
+              1,
+              double.infinity,
+            ),
+            value: _currentPosition.inMilliseconds
+                .clamp(0, _currentDuration.inMilliseconds)
+                .toDouble(),
+            activeColor: const Color(0xFF9859FF),
+            inactiveColor: Colors.grey[300],
+            onChanged: (value) {
+              _seekAudio(Duration(milliseconds: value.toInt()));
+            },
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _formatDuration(_currentPosition),
+                style: const TextStyle(color: Colors.grey),
+              ),
+              Text(
+                _formatDuration(_currentDuration),
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                onPressed: () => _playPrevious(audios),
+                icon: const Icon(Icons.skip_previous, color: Color(0xFF9859FF)),
+              ),
+              IconButton(
+                onPressed: () => _seekRelative(const Duration(seconds: -10)),
+                icon: const Icon(Icons.replay_10, color: Color(0xFF9859FF)),
+              ),
+              IconButton(
+                onPressed: () =>
+                    _isPlaying ? _pauseAudio() : _playAudio(currentAudio),
+                icon: Icon(
+                  _isPlaying ? Icons.pause_circle : Icons.play_circle,
+                  color: const Color(0xFF9859FF),
+                  size: 36,
+                ),
+              ),
+              IconButton(
+                onPressed: () => _seekRelative(const Duration(seconds: 10)),
+                icon: const Icon(Icons.forward_10, color: Color(0xFF9859FF)),
+              ),
+              IconButton(
+                onPressed: () => _playNext(audios),
+                icon: const Icon(Icons.skip_next, color: Color(0xFF9859FF)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _playNext(List<Recording> audios) async {
+    final currentIndex = audios.indexWhere(
+      (audio) => audio.id == _currentlyPlayingId,
+    );
+    if (currentIndex >= 0 && currentIndex < audios.length - 1) {
+      await _playAudio(audios[currentIndex + 1]);
+    }
+  }
+
+  Future<void> _playPrevious(List<Recording> audios) async {
+    final currentIndex = audios.indexWhere(
+      (audio) => audio.id == _currentlyPlayingId,
+    );
+    if (currentIndex > 0) {
+      await _playAudio(audios[currentIndex - 1]);
     }
   }
 
   Future<void> _downloadAudio(Recording audio) async {
     if (audio.cleanedAudio == null || audio.cleanedAudio!.isEmpty) {
-      _showSnackBar('No cleaned audio available');
+      _showInlineFeedback(
+        'No cleaned audio available',
+        color: Colors.redAccent,
+      );
       return;
     }
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Downloading...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showInlineFeedback('Downloading...', color: Colors.greenAccent);
 
       final success = await _recordingService.downloadCleanedAudio(audio);
 
       if (success) {
-        _showSnackBar('Audio downloaded successfully');
+        _showInlineFeedback(
+          'Audio downloaded successfully',
+          color: Colors.greenAccent,
+        );
       } else {
-        _showSnackBar('Download cancelled');
+        _showInlineFeedback('Download cancelled', color: Colors.grey);
       }
     } catch (e) {
-      _showSnackBar('Error downloading audio: $e');
+      _showInlineFeedback(
+        'Error downloading audio: $e',
+        color: Colors.redAccent,
+      );
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-    );
+  void _showInlineFeedback(
+    String message, {
+    Color color = const Color(0xFF9859FF),
+  }) {
+    setState(() {
+      _feedbackMessage = message;
+      _feedbackColor = color;
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _feedbackMessage = null);
+      }
+    });
   }
 }

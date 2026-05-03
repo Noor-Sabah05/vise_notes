@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/recording_service.dart';
 import 'transcript_detail_screen.dart';
 
@@ -12,6 +13,8 @@ class TranscriptsScreen extends StatefulWidget {
 class _TranscriptsScreenState extends State<TranscriptsScreen> {
   late RecordingService _recordingService;
   String _searchQuery = '';
+  String? _feedbackMessage;
+  Color _feedbackColor = const Color(0xFF9859FF);
 
   @override
   void initState() {
@@ -84,6 +87,30 @@ class _TranscriptsScreenState extends State<TranscriptsScreen> {
                 ),
               ),
             ),
+            if (_feedbackMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    key: ValueKey(_feedbackMessage),
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _feedbackColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      _feedbackMessage!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             // Transcripts list
             Expanded(
               child: filteredTranscripts.isEmpty
@@ -192,6 +219,58 @@ class _TranscriptsScreenState extends State<TranscriptsScreen> {
                                     height: 1.5,
                                   ),
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: transcript.transcript != null
+                                          ? () {
+                                              Share.share(
+                                                transcript.transcript!,
+                                                subject: transcript.title,
+                                              );
+                                              _showInlineFeedback(
+                                                'Transcript shared',
+                                              );
+                                            }
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.share,
+                                        color: Color(0xFF9859FF),
+                                      ),
+                                      label: const Text(
+                                        'Share',
+                                        style: TextStyle(
+                                          color: Color(0xFF9859FF),
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        _recordingService.removeTranscript(
+                                          transcript.id,
+                                        );
+                                        setState(() {});
+                                        _showInlineFeedback(
+                                          'Transcript deleted',
+                                          color: Colors.redAccent,
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.redAccent,
+                                      ),
+                                      label: const Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -207,5 +286,20 @@ class _TranscriptsScreenState extends State<TranscriptsScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  void _showInlineFeedback(
+    String message, {
+    Color color = const Color(0xFF9859FF),
+  }) {
+    setState(() {
+      _feedbackMessage = message;
+      _feedbackColor = color;
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _feedbackMessage = null);
+      }
+    });
   }
 }

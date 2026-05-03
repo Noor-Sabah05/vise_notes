@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/recording_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/transcripts_screen.dart';
 import 'screens/events_screen.dart';
@@ -7,7 +8,9 @@ import 'screens/recordings_screen.dart';
 import 'screens/save_screen.dart';
 import 'screens/category_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RecordingService().init();
   runApp(const MyApp());
 }
 
@@ -27,10 +30,23 @@ class MyApp extends StatelessWidget {
       home: const MainShell(),
       onGenerateRoute: (settings) {
         if (settings.name == '/save') {
-          return MaterialPageRoute(
-            builder: (context) =>
-                SaveScreen(transcript: settings.arguments as String?),
-          );
+          final args = settings.arguments;
+          if (args is SaveScreenArguments) {
+            return MaterialPageRoute(
+              builder: (context) => SaveScreen(
+                transcript: args.transcript,
+                selectedFile: args.selectedFile,
+                fileName: args.fileName,
+                selectedCategory: args.selectedCategory,
+              ),
+            );
+          }
+          if (args is String?) {
+            return MaterialPageRoute(
+              builder: (context) => SaveScreen(transcript: args),
+            );
+          }
+          return MaterialPageRoute(builder: (context) => const SaveScreen());
         }
         return null;
       },

@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 /// Handles all audio, notes, PDF, and quiz operations
 class ApiService {
   /// Backend base URL - change to your server IP/domain
-  static const String baseUrl = 'http://192.168.100.55:8000';
+  static const String baseUrl = 'http://192.168.100.9:8000';
 
   // ─────────────────────────────────────────────────────────────
   // AUDIO PROCESSING

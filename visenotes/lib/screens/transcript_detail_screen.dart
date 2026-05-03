@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/recording.dart';
 
 class TranscriptDetailScreen extends StatelessWidget {
@@ -159,9 +161,12 @@ class TranscriptDetailScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Copy to clipboard
-                      ScaffoldMessenger.of(context).showSnackBar(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await Clipboard.setData(
+                        ClipboardData(text: transcript.transcript ?? ''),
+                      );
+                      messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Transcript copied to clipboard!'),
                           backgroundColor: Color(0xFF9859FF),
@@ -185,14 +190,20 @@ class TranscriptDetailScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      // Share functionality
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Share feature coming soon!'),
-                          backgroundColor: Colors.grey,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+                      if (transcript.transcript?.isNotEmpty ?? false) {
+                        Share.share(
+                          transcript.transcript!,
+                          subject: transcript.title,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No transcript available to share'),
+                            backgroundColor: Colors.grey,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.share),
                     label: const Text('Share'),

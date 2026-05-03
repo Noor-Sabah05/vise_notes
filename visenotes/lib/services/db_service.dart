@@ -15,7 +15,7 @@ class DBService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, v) async {
         await db.execute('''
         CREATE TABLE notes(
@@ -28,7 +28,28 @@ class DBService {
         )
         ''');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await _addColumnIfNotExists(db, 'notes', 'pdfPath', 'TEXT');
+        await _addColumnIfNotExists(db, 'notes', 'category', 'TEXT');
+      },
+      onOpen: (db) async {
+        await _addColumnIfNotExists(db, 'notes', 'pdfPath', 'TEXT');
+        await _addColumnIfNotExists(db, 'notes', 'category', 'TEXT');
+      },
     );
+  }
+
+  Future<void> _addColumnIfNotExists(
+    Database db,
+    String table,
+    String column,
+    String columnType,
+  ) async {
+    final result = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = result.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $columnType');
+    }
   }
 
   Future<void> insert(Note note) async {

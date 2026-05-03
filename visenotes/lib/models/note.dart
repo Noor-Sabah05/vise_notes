@@ -32,7 +32,7 @@ class Note {
       title: map["title"] ?? "",
       description: map["summary"] ?? "",
       date: map["date"] ?? "",
-      pdfPath: map["pdfPath"],
+      pdfPath: map["pdfPath"] ?? map["pdf_path"],
       category: map["category"],
     );
   }
