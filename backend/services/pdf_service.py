@@ -31,26 +31,46 @@ def generate_pdf(file_path: str, title: str, summary: str, content: str, key_poi
     section_style = ParagraphStyle(
         "section",
         parent=styles["Heading2"],
-        fontSize=14,
-        leading=18,
-        textColor=colors.HexColor("#2563eb"),
-        spaceBefore=14,
-        spaceAfter=8
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor("#111827"),
+        spaceBefore=16,
+        spaceAfter=12,
+        fontName="Helvetica-Bold",
+    )
+
+    section_header_style = ParagraphStyle(
+        "section_header",
+        parent=styles["Heading2"],
+        fontSize=16,
+        leading=20,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        alignment=0,
     )
 
     normal_style = ParagraphStyle(
         "normal",
         parent=styles["BodyText"],
-        fontSize=11,
-        leading=16,
+        fontSize=12,
+        leading=18,
         textColor=colors.HexColor("#374151"),
+    )
+
+    meta_style = ParagraphStyle(
+        "meta",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor("#6B7280"),
+        spaceAfter=14,
     )
 
     bullet_style = ParagraphStyle(
         "bullet",
         parent=styles["BodyText"],
-        fontSize=11,
-        leading=16,
+        fontSize=12,
+        leading=18,
         leftIndent=14,
         bulletIndent=8,
         textColor=colors.HexColor("#374151"),
@@ -63,61 +83,106 @@ def generate_pdf(file_path: str, title: str, summary: str, content: str, key_poi
 
     # Title
     story.append(Paragraph(title, title_style))
+    story.append(Paragraph("AI-generated study notes", meta_style))
     story.append(Spacer(1, 10))
 
     # ========================
     # SUMMARY CARD (DESIGN)
     # ========================
-    story.append(Paragraph("SUMMARY", section_style))
-
-    summary_table = Table([[Paragraph(summary, normal_style)]],
-                          colWidths=[500])
+    summary_table = Table(
+        [
+            [Paragraph("SUMMARY", section_header_style)],
+            [Paragraph(summary, normal_style)],
+        ],
+        colWidths=[500],
+    )
 
     summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EFF6FF")),
-        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#93C5FD")),
-        ("INNERPADDING", (0, 0), (-1, -1), 12),
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#7C3AED")),
+        ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#EFF6FF")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#A78BFA")),
+        ("INNERPADDING", (0, 0), (-1, -1), 14),
+        ("LEFTPADDING", (0, 0), (-1, -1), 16),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+        ("TOPPADDING", (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
     ]))
 
     story.append(summary_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 18))
 
     # ========================
     # KEY POINTS BOX
     # ========================
     if key_points:
-        story.append(Paragraph("KEY POINTS", section_style))
+        bullets = [item.strip() for item in key_points.replace("•", "-").split("\n") if item.strip()]
+        bullet_rows = [[Paragraph("KEY POINTS", section_header_style)]]
+        for item in bullets:
+            text = item.lstrip("-*").strip()
+            if text:
+                bullet_rows.append([Paragraph(f"• {text}", bullet_style)])
 
-        kp_table = Table([[Paragraph(key_points.replace("\n", "<br/>"), normal_style)]],
-                         colWidths=[500])
-
+        kp_table = Table(bullet_rows, colWidths=[500], splitByRow=1)
         kp_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ECFDF5")),
-            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#6EE7B7")),
+            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#059669")),
+            ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#ECFDF5")),
+            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#34D399")),
             ("INNERPADDING", (0, 0), (-1, -1), 12),
+            ("LEFTPADDING", (0, 0), (-1, -1), 16),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+            ("TOPPADDING", (0, 0), (-1, -1), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
         ]))
 
         story.append(kp_table)
-        story.append(Spacer(1, 12))
+        story.append(Spacer(1, 16))
 
     # ========================
     # CONTENT SECTION
     # ========================
-    story.append(Paragraph("DETAILED NOTES", section_style))
+    raw_lines = [line.rstrip() for line in content.split("\n")]
+    content_rows = [[Paragraph("DETAILED NOTES", section_header_style)]]
+    paragraph_buffer = []
 
-    for line in content.split("\n"):
-        line = line.strip()
+    def flush_paragraph():
+        nonlocal paragraph_buffer
+        if paragraph_buffer:
+            content_rows.append([Paragraph(" ".join(paragraph_buffer), normal_style)])
+            paragraph_buffer = []
 
-        if not line:
-            story.append(Spacer(1, 6))
+    for line in raw_lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            flush_paragraph()
             continue
 
-        # Bullet handling
-        if line.startswith("- ") or line.startswith("* "):
-            line = "• " + line[2:]
-            story.append(Paragraph(line, bullet_style))
+        if stripped_line.startswith("- ") or stripped_line.startswith("* "):
+            flush_paragraph()
+            content_rows.append([Paragraph(f"• {stripped_line[2:].strip()}", bullet_style)])
         else:
-            story.append(Paragraph(line, normal_style))
+            paragraph_buffer.append(stripped_line)
+
+    flush_paragraph()
+
+    if len(content_rows) == 1:
+        content_rows.append([Paragraph("No detailed notes available.", normal_style)])
+
+    content_table = Table(content_rows, colWidths=[500], splitByRow=1)
+    content_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#F59E0B")),
+        ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FEF3C7")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#F59E0B")),
+        ("INNERPADDING", (0, 0), (-1, -1), 14),
+        ("LEFTPADDING", (0, 0), (-1, -1), 16),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+        ("TOPPADDING", (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+    ]))
+
+    story.append(content_table)
 
     doc.build(story)
 
