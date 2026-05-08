@@ -36,14 +36,16 @@ class RecordingService {
           _cleanedAudios.clear();
           if (transcripts != null) {
             _savedTranscripts.addAll(
-              transcripts
-                  .map((item) => Recording.fromMap(item as Map<String, dynamic>)),
+              transcripts.map(
+                (item) => Recording.fromMap(item as Map<String, dynamic>),
+              ),
             );
           }
           if (audios != null) {
             _cleanedAudios.addAll(
-              audios
-                  .map((item) => Recording.fromMap(item as Map<String, dynamic>)),
+              audios.map(
+                (item) => Recording.fromMap(item as Map<String, dynamic>),
+              ),
             );
           }
         } catch (_) {
