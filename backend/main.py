@@ -1,9 +1,8 @@
 import shutil
 import uuid
-import json
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,7 +12,6 @@ from database import init_db, save_transcript
 from services.audio_service import preprocess_audio
 from services.notes_service import NotesService
 from services.pdf_service import generate_pdf
-from services.streaming_service import StreamingTranscriptionManager
 from config import GEMINI_API_KEY
 from models.notes_request_model import NotesRequest
 from services.pdf_reader import extract_text_from_pdf
@@ -326,126 +324,3 @@ async def generate_quiz_pdf_endpoint(file: UploadFile = File(...)):
         media_type="application/pdf",
         filename="quiz.pdf",
     )
-
-
-# ─────────────────────────────────────────────────────────────
-# 🔴 WEBSOCKET: LIVE STREAMING TRANSCRIPTION
-# ─────────────────────────────────────────────────────────────
-@app.websocket("/ws/transcribe-stream")
-async def websocket_transcribe_stream(websocket: WebSocket):
-    """
-    WebSocket endpoint for live audio streaming transcription.
-    
-    Client flow:
-    1. Connect to /ws/transcribe-stream
-    2. Send binary audio chunks (PCM, mono, 16-bit, 16kHz)
-    3. Receive JSON messages with partial transcriptions
-    4. Close connection when done recording
-    
-    Server flow:
-    1. Accept connection
-    2. Receive audio chunks, buffer them (~2.5 seconds)
-    3. Transcribe each buffer with Whisper
-    4. Send partial transcriptions back
-    5. On disconnect: accumulate full transcript, generate notes
-    
-    Message format (server → client):
-    {
-        "type": "partial" | "final" | "error",
-        "partial_transcript": "text so far",
-        "is_final": false,
-        "language": "en",
-        "duration": 2.5,
-        ...
-    }
-    """
-    await websocket.accept()
-    
-    # Initialize streaming transcription manager
-    transcription_manager = StreamingTranscriptionManager(
-        sample_rate=16000,
-        buffer_duration=2.5
-    )
-    
-    try:
-        while True:
-            # Receive binary audio data from client
-            data = await websocket.receive_bytes()
-            
-            # Process audio chunk
-            result = transcription_manager.add_audio_chunk(data)
-            
-            # Send response back to client
-            await websocket.send_json({
-                "type": "partial",
-                **result
-            })
-            
-    except WebSocketDisconnect:
-        print("Client disconnected from streaming transcription")
-        
-    except Exception as e:
-        print(f"WebSocket error: {str(e)}")
-        try:
-            await websocket.send_json({
-                "type": "error",
-                "error": str(e)
-            })
-        except:
-            pass
-        
-    finally:
-        # Finalize transcription
-        final_result = transcription_manager.finalize_transcription()
-        full_transcript = final_result["full_transcript"]
-        
-        if not full_transcript.strip():
-            print("Empty transcript, closing WebSocket")
-            try:
-                await websocket.send_json({
-                    "type": "error",
-                    "error": "Empty recording"
-                })
-            except:
-                pass
-            return
-        
-        try:
-            # Generate notes from accumulated transcript
-            print(f"Generating notes from transcript ({len(full_transcript)} chars)...")
-            notes = notes_service.generate_notes(full_transcript)
-            
-            # Save full audio to file for record
-            file_id = str(uuid.uuid4())
-            audio_path = UPLOAD_DIR / f"{file_id}_stream_audio.wav"
-            transcription_manager.save_full_audio(str(audio_path))
-            
-            # Save transcript to database
-            save_transcript(
-                file_id=file_id,
-                filename=f"stream_{file_id}.wav",
-                language="en",
-                duration=final_result["total_duration"],
-                transcript=full_transcript
-            )
-            
-            print(f"Saved recording {file_id}, generating final response...")
-            
-            # Send final result with notes
-            await websocket.send_json({
-                "type": "final",
-                "file_id": file_id,
-                "full_transcript": full_transcript,
-                "duration": final_result["total_duration"],
-                "notes": notes
-            })
-            
-        except Exception as e:
-            print(f"Error in finalization: {str(e)}")
-            try:
-                await websocket.send_json({
-                    "type": "error",
-                    "error": f"Failed to generate notes: {str(e)}"
-                })
-            except:
-                pass

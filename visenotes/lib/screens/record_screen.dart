@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-import 'dart:async';
 import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
 import '../services/db_service.dart';
 import '../services/recording_service.dart';
-import '../services/stream_recording_service.dart';
-import '../services/streaming_transcription_service.dart';
 import '../models/recording.dart';
 import '../models/note.dart';
 import 'notes_screen.dart';
@@ -30,14 +27,6 @@ class _RecordScreenState extends State<RecordScreen> {
   String? _feedbackMessage;
   Color _feedbackColor = const Color(0xFF9859FF);
   int _tabIndex = 0;
-
-  // Streaming recording services
-  late StreamRecordingService _recordingService;
-  late StreamingTranscriptionService _transcriptionService;
-  StreamSubscription? _audioStreamSubscription;
-  StreamSubscription? _transcriptionStreamSubscription;
-  String _liveTranscript = '';
-  Timer? _uiUpdateTimer;
 
   final List<String> _categories = [
     'Business',
@@ -74,41 +63,6 @@ class _RecordScreenState extends State<RecordScreen> {
       filePath: 'path',
     ),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _recordingService = StreamRecordingService();
-    _transcriptionService = StreamingTranscriptionService();
-    _initializeServices();
-
-    // Start UI update timer for recording display
-    _uiUpdateTimer = Timer.periodic(Duration(milliseconds: 100), (_) {
-      if (_isRecording && mounted) {
-        setState(() {}); // Force rebuild to update timer display
-      }
-    });
-  }
-
-  Future<void> _initializeServices() async {
-    try {
-      await _recordingService.initialize();
-      print('StreamRecordingService initialized');
-    } catch (e) {
-      print('Failed to initialize StreamRecordingService: $e');
-      _showInlineFeedback('Failed to initialize recording', color: Colors.red);
-    }
-  }
-
-  @override
-  void dispose() {
-    _uiUpdateTimer?.cancel();
-    _audioStreamSubscription?.cancel();
-    _transcriptionStreamSubscription?.cancel();
-    _recordingService.dispose();
-    _transcriptionService.disconnect();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,10 +207,12 @@ class _RecordScreenState extends State<RecordScreen> {
             ),
           ),
           const SizedBox(height: 60),
-          // Microphone button
+          // Microphone button (dummy)
           Center(
             child: GestureDetector(
-              onTap: _isRecording ? _stopRecording : _startRecording,
+              onTap: () {
+                setState(() => _isRecording = !_isRecording);
+              },
               child: Container(
                 width: 120,
                 height: 120,
@@ -282,74 +238,13 @@ class _RecordScreenState extends State<RecordScreen> {
           const SizedBox(height: 30),
           // Timer
           Text(
-            _isRecording ? _recordingService.getFormattedDuration() : '00:00',
+            _isRecording ? '00:00' : '00:00',
             style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 20),
-          // Live transcript display
-          if (_isRecording)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCCCCFF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF9859FF), width: 2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Live Transcript:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF9859FF),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'Transcribing...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 100,
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _liveTranscript.isEmpty
-                              ? 'Listening... Start speaking'
-                              : _liveTranscript,
-                          style: const TextStyle(color: Colors.black87),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           const SizedBox(height: 60),
           // Divider
           Padding(
@@ -368,58 +263,57 @@ class _RecordScreenState extends State<RecordScreen> {
           ),
           const SizedBox(height: 30),
           // Upload audio file option
-          if (!_isRecording)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Or upload an audio file',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Or upload an audio file',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: _pickFile,
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: const Color(0xFF9859FF),
-                          width: 2,
-                          style: BorderStyle.solid,
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _pickFile,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFF9859FF),
+                        width: 2,
+                        style: BorderStyle.solid,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFFCCCCFF).withOpacity(0.3),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.cloud_upload_outlined,
+                          color: Color(0xFF9859FF),
+                          size: 24,
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        color: const Color(0xFFCCCCFF).withOpacity(0.3),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.cloud_upload_outlined,
+                        const SizedBox(width: 12),
+                        Text(
+                          _fileName ?? 'Select audio file',
+                          style: const TextStyle(
                             color: Color(0xFF9859FF),
-                            size: 24,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            _fileName ?? 'Select audio file',
-                            style: const TextStyle(
-                              color: Color(0xFF9859FF),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
           const SizedBox(height: 20),
           // Upload button
           if (_selectedFile != null)
@@ -862,145 +756,6 @@ class _RecordScreenState extends State<RecordScreen> {
       if (mounted) {
         _showInlineFeedback('Audio cleaning failed', color: Colors.red);
       }
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // LIVE RECORDING & STREAMING TRANSCRIPTION
-  // ─────────────────────────────────────────────────────────────
-
-  Future<void> _startRecording() async {
-    if (_selectedCategory == 'Select Category') {
-      _showInlineFeedback(
-        'Please select a category first',
-        color: Colors.orange,
-      );
-      return;
-    }
-
-    try {
-      _showInlineFeedback('Starting recording...');
-
-      // Start recording
-      await _recordingService.startRecording();
-
-      // Connect to WebSocket transcription service
-      await _transcriptionService.connect();
-
-      // Listen to audio stream and send to WebSocket
-      _audioStreamSubscription = _recordingService.audioStream.listen(
-        (audioChunk) {
-          _transcriptionService.sendAudioChunk(audioChunk);
-        },
-        onError: (error) {
-          print('Audio stream error: $error');
-          _showInlineFeedback('Recording error: $error', color: Colors.red);
-        },
-      );
-
-      // Listen to transcription updates
-      _transcriptionStreamSubscription = _transcriptionService
-          .transcriptionStream
-          ?.listen(
-            (message) {
-              _handleTranscriptionMessage(message);
-            },
-            onError: (error) {
-              print('Transcription stream error: $error');
-              _showInlineFeedback(
-                'Transcription error: $error',
-                color: Colors.red,
-              );
-            },
-          );
-
-      setState(() {
-        _isRecording = true;
-        _liveTranscript = '';
-        _transcript = null;
-        _errorMessage = null;
-      });
-
-      _showInlineFeedback('Recording started...');
-    } catch (e) {
-      print('Error starting recording: $e');
-      _showInlineFeedback('Failed to start recording: $e', color: Colors.red);
-    }
-  }
-
-  Future<void> _stopRecording() async {
-    try {
-      _showInlineFeedback('Stopping recording...');
-
-      // Stop recording
-      await _recordingService.stopRecording();
-
-      // Cancel audio streaming
-      _audioStreamSubscription?.cancel();
-
-      setState(() {
-        _isRecording = false;
-        _isLoading = true;
-      });
-
-      // WebSocket will close and send final transcript + notes
-      // Wait a bit for the final message
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Disconnect WebSocket
-      await _transcriptionService.disconnect();
-    } catch (e) {
-      print('Error stopping recording: $e');
-      _showInlineFeedback('Failed to stop recording: $e', color: Colors.red);
-    } finally {
-      _audioStreamSubscription?.cancel();
-      _transcriptionStreamSubscription?.cancel();
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _handleTranscriptionMessage(Map<String, dynamic> message) {
-    final type = message['type'] ?? '';
-
-    print('Received message type: $type');
-
-    if (type == 'partial') {
-      final partialTranscript = message['partial_transcript'] ?? '';
-      if (partialTranscript.isNotEmpty) {
-        setState(() {
-          _liveTranscript += ' $partialTranscript';
-        });
-      }
-    } else if (type == 'final') {
-      // Final message from WebSocket with notes
-      final fullTranscript = message['full_transcript'] ?? '';
-      final notes = message['notes'] as Map<String, dynamic>? ?? {};
-
-      setState(() {
-        _transcript = fullTranscript;
-      });
-
-      _showInlineFeedback('Recording saved and notes generated!');
-
-      // Navigate to NotesScreen with the generated notes
-      if (mounted && fullTranscript.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => NotesScreen(
-              title: notes['title'] ?? 'Notes',
-              summary: notes['summary'] ?? '',
-              content: notes['content'] ?? '',
-              keyPoints: notes['key_points'] ?? '',
-              transcript: fullTranscript,
-              audioFile: null,
-            ),
-          ),
-        );
-      }
-    } else if (type == 'error') {
-      final error = message['error'] ?? 'Unknown error';
-      _showInlineFeedback('Error: $error', color: Colors.red);
     }
   }
 }

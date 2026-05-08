@@ -1,7 +1,6 @@
 # FastAPI and web server
 fastapi
 uvicorn[standard]
-websockets
 
 # Speech-to-text
 faster-whisper
